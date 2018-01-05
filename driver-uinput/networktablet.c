@@ -105,8 +105,45 @@ void quit(int signal) {
 }
 
 
-int main(void)
+int main(int argc, char *argv[])
 {
+	int amplitude = 65536;
+	double width_scale, width_offset, height_scale, height_offset;
+	// -------------------------------
+	printf("Edited GfxTablet, optional parameters: <top> <bottom> <left> <right> percent crop\n");
+	if(argc == 5) {
+		int top, bottom, left, right;
+		top = atoi(argv[1]);
+		bottom = atoi(argv[2]);
+		left = atoi(argv[3]);
+		right = atoi(argv[4]);
+
+		int top_r, bottom_r, left_r, right_r;
+
+		top_r = amplitude * top / 100;
+		bottom_r = amplitude * bottom / 100;
+		left_r = amplitude * left / 100;
+		right_r = amplitude * right / 100;
+
+		height_offset = -top_r;
+		height_scale = (double)(amplitude + top_r + bottom_r) / (double)(amplitude);
+
+		width_offset = -left_r;
+		width_scale = (double)(amplitude + left_r + right_r) / (double)(amplitude);
+
+		printf("Ussing crop values %i%%, %i%%, %i%%, %i%%\n", top, bottom, left, right);
+	} else {
+		width_scale = 1;
+		width_offset = 0;
+		height_scale = 1;
+		height_offset = 0;
+	}
+
+	printf("height_offset: %f; height_scale: %f;\nwidth_offset: %f; width_scale: %f\n",
+			height_offset, height_scale, width_offset, width_scale);
+
+	// -------------------------------
+
 	int device;
 	struct event_packet ev_pkt;
 
@@ -136,14 +173,25 @@ int main(void)
 			break;
 		}
 
-		ev_pkt.x = ntohs(ev_pkt.x);
-		ev_pkt.y = ntohs(ev_pkt.y);
+		int x = width_offset + (double)(ntohs(ev_pkt.x)) * width_scale;
+		int y = height_offset + (double)(ntohs(ev_pkt.y)) * height_scale;
+
+
+		ev_pkt.x = x;
+		ev_pkt.y = y;
+
 		ev_pkt.pressure = ntohs(ev_pkt.pressure);
 		printf("x: %hu, y: %hu, pressure: %hu\n", ev_pkt.x, ev_pkt.y, ev_pkt.pressure);
 
-		send_event(device, EV_ABS, ABS_X, ev_pkt.x);
-		send_event(device, EV_ABS, ABS_Y, ev_pkt.y);
 		send_event(device, EV_ABS, ABS_PRESSURE, ev_pkt.pressure);
+
+		if (!(
+				(x < 0) || (x > amplitude) ||
+				(y < 0) || (y > amplitude) 
+			)) {
+			send_event(device, EV_ABS, ABS_X, ev_pkt.x);
+			send_event(device, EV_ABS, ABS_Y, ev_pkt.y);
+		}
 
 		switch (ev_pkt.type) {
 			case EVENT_TYPE_MOTION:
